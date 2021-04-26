@@ -80,14 +80,13 @@ func isProblematicInterface(nif *net.Interface) bool {
 	return false
 }
 
-// LocalAddresses returns the machine's IP addresses, separated by
-// whether they're loopback addresses.
 func LocalAddresses() (regular, loopback []netaddr.IP, err error) {
 	// TODO(crawshaw): don't serve interface addresses that we are routing
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		return nil, nil, err
 	}
+	var regular4, regular6, linklocal4, linklocal6 []netaddr.IP
 	for i := range ifaces {
 		iface := &ifaces[i]
 		if !isUp(iface) || isProblematicInterface(iface) {
@@ -117,17 +116,31 @@ func LocalAddresses() (regular, loopback []netaddr.IP, err error) {
 				if tsaddr.IsTailscaleIP(ip) {
 					continue
 				}
-				if ip.IsLinkLocalUnicast() {
-					continue
-				}
 				if ip.IsLoopback() || ifcIsLoopback {
 					loopback = append(loopback, ip)
+				} else if ip.IsLinkLocalUnicast() || tsaddr.IsULA(ip) {
+					if ip.Is4() {
+						linklocal4 = append(linklocal4, ip)
+					} else {
+						linklocal6 = append(linklocal6, ip)
+					}
 				} else {
-					regular = append(regular, ip)
+					if ip.Is4() {
+						regular4 = append(regular4, ip)
+					} else {
+						regular6 = append(regular6, ip)
+					}
 				}
 			}
 		}
 	}
+	if len(regular4) == 0 {
+		regular4 = linklocal4
+	}
+	if len(regular6) == 0 {
+		regular6 = linklocal6
+	}
+	regular = append(regular4, regular6...)
 	sortIPs(regular)
 	sortIPs(loopback)
 	return regular, loopback, nil
@@ -248,6 +261,7 @@ func (s *State) String() string {
 			ifs = append(ifs, k)
 		}
 	}
+
 	sort.Slice(ifs, func(i, j int) bool {
 		upi, upj := s.Interface[ifs[i]].IsUp(), s.Interface[ifs[j]].IsUp()
 		if upi != upj {
@@ -407,7 +421,7 @@ func GetState() (*State, error) {
 			return
 		}
 		for _, pfx := range pfxs {
-			if pfx.IP().IsLoopback() || pfx.IP().IsLinkLocalUnicast() {
+			if pfx.IP().IsLoopback() {
 				continue
 			}
 			s.HaveV6Global = s.HaveV6Global || isGlobalV6(pfx.IP())
@@ -504,8 +518,7 @@ func isPrivateIP(ip netaddr.IP) bool {
 }
 
 func isGlobalV6(ip netaddr.IP) bool {
-	return v6Global1.Contains(ip) ||
-		(tsaddr.IsULA(ip) && !tsaddr.TailscaleULARange().Contains(ip))
+	return v6Global1.Contains(ip)
 }
 
 func mustCIDR(s string) netaddr.IPPrefix {
@@ -537,10 +550,7 @@ func anyInterestingIP(pfxs []netaddr.IPPrefix) bool {
 
 // isInterestingIP reports whether ip is an interesting IP that we
 // should log in interfaces.State logging. We don't need to show
-// localhost or link-local addresses.
+// localhost.
 func isInterestingIP(ip netaddr.IP) bool {
-	if ip.IsLoopback() || ip.IsLinkLocalUnicast() {
-		return false
-	}
-	return true
+	return !ip.IsLoopback()
 }

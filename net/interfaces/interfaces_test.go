@@ -52,9 +52,9 @@ func TestIsGlobalV6(t *testing.T) {
 		ip   string
 		want bool
 	}{
-		{"first ULA", "fc00::1", true},
+		{"first ULA", "fc00::1", false},
 		{"Tailscale", "fd7a:115c:a1e0::1", false},
-		{"Cloud Run", "fddf:3978:feb1:d745::1", true},
+		{"Cloud Run", "fddf:3978:feb1:d745::1", false},
 		{"zeros", "0000:0000:0000:0000:0000:0000:0000:0000", false},
 		{"Link Local", "fe80::1", false},
 		{"Global", "2602::1", true},
