@@ -99,6 +99,7 @@ func (s *Server) initMux() {
 	s.mux.HandleFunc("/", s.serveUnhandled)
 	s.mux.HandleFunc("/key", s.serveKey)
 	s.mux.HandleFunc("/machine/", s.serveMachine)
+	s.mux.HandleFunc("/ping", s.servePingInfo)
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -170,6 +171,19 @@ func (s *Server) serveMachine(w http.ResponseWriter, r *http.Request) {
 	default:
 		s.serveUnhandled(w, r)
 	}
+}
+
+func (s *Server) servePingInfo(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "PUT" {
+		panic("Only PUT requests are supported currently")
+	}
+	w.Header().Set("Content-Type", "text/plain")
+	reqBody, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		panic("Failed to read request body")
+	}
+	w.WriteHeader(200)
+	io.WriteString(w, "Ping Streamed Back : "+string(reqBody))
 }
 
 // Node returns the node for nodeKey. It's always nil or cloned memory.
