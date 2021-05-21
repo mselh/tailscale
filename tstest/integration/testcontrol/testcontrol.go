@@ -113,6 +113,19 @@ func (s *Server) serveUnhandled(w http.ResponseWriter, r *http.Request) {
 	go panic(fmt.Sprintf("testcontrol.Server received unhandled request: %s", got.Bytes()))
 }
 
+func (s *Server) addPingRequest(res *tailcfg.MapResponse) error {
+	if len(res.Peers) == 0 {
+		return errors.New("MapResponse has no peers to ping")
+	}
+
+	if len(res.Peers[0].Addresses) == 0 || len(res.Peers[0].AllowedIPs) == 0 {
+		return errors.New("peer has no Addresses or no AllowedIPs")
+	}
+	targetIP := res.Peers[0].AllowedIPs[0].IP()
+	res.PingRequest = &tailcfg.PingRequest{URL: s.BaseURL + "/ping", IP: targetIP, Types: "tsmp"}
+	return nil
+}
+
 func (s *Server) publicKey() wgkey.Key {
 	pub, _ := s.keyPair()
 	return pub
@@ -568,6 +581,14 @@ func (s *Server) MapResponse(req *tailcfg.MapRequest) (res *tailcfg.MapResponse,
 		netaddr.MustParseIPPrefix(fmt.Sprintf("100.64.%d.%d/32", uint8(node.ID>>8), uint8(node.ID))),
 	}
 	res.Node.AllowedIPs = res.Node.Addresses
+
+	if req.Ping {
+		err = s.addPingRequest(res)
+		// Currently some responses just won't have peers
+		if err != nil {
+			s.logf("%v", err)
+		}
+	}
 	return res, nil
 }
 

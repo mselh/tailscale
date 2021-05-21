@@ -226,6 +226,56 @@ func TestNodeAddressIPFields(t *testing.T) {
 
 	d1.MustCleanShutdown(t)
 }
+func TestControlSelectivePing(t *testing.T) {
+	t.Parallel()
+	bins := buildTestBinaries(t)
+
+	env := newTestEnv(t, bins)
+	defer env.Close()
+
+	// Create two nodes:
+	n1 := newTestNode(t, env)
+	d1 := n1.StartDaemon(t)
+	defer d1.Kill()
+
+	n2 := newTestNode(t, env)
+	d2 := n2.StartDaemon(t)
+	defer d2.Kill()
+
+	n1.AwaitListening(t)
+	n2.AwaitListening(t)
+	n1.MustUp()
+	n2.MustUp()
+	n1.AwaitRunning(t)
+	n2.AwaitRunning(t)
+
+	req := new(tailcfg.MapRequest)
+	req.Ping = true
+	env.Control.MapResponse(req)
+	if err := tstest.WaitFor(2*time.Second, func() error {
+		st := n1.MustStatus(t)
+		if st.Self == nil {
+			return errors.New("self peer status is nil")
+		}
+		req.NodeKey = tailcfg.NodeKey(st.Self.PublicKey)
+		return nil
+	}); err != nil {
+		t.Error(err)
+	}
+	mr, err := env.Control.MapResponse(req)
+	if err != nil {
+		t.Error(err)
+	}
+	t.Log("RECEIVED PR", mr.PingRequest)
+	if mr.PingRequest == nil {
+		t.Error("PingRequest does not exist")
+	}
+	if mr.Peers[0].Addresses[0].IP() != mr.PingRequest.IP {
+		t.Error("Mismatch in IP address for the PingRequest")
+	}
+	d1.MustCleanShutdown(t)
+	d2.MustCleanShutdown(t)
+}
 
 // testBinaries are the paths to a tailscaled and tailscale binary.
 // These can be shared by multiple nodes.

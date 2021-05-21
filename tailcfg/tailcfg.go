@@ -749,6 +749,9 @@ type MapRequest struct {
 	//     * "minimize-netmap": have control minimize the netmap, removing
 	//       peers that are unreachable per ACLS.
 	DebugFlags []string `json:",omitempty"`
+
+	// Basic boolean field to determine if a Ping is being intitiated
+	Ping bool
 }
 
 // PortRange represents a range of UDP or TCP port numbers.
@@ -884,6 +887,13 @@ type PingRequest struct {
 	// Log is whether to log about this ping in the success case.
 	// For failure cases, the client will log regardless.
 	Log bool `json:",omitempty"`
+
+	Initiator        string     // admin@email; "system" (for Tailscale)
+	IP               netaddr.IP // IP address that we are going to ping
+	Types            string     // empty means all: TSMP+ICMP+disco
+	StopAfterNDirect int        // 1 means stop on 1st direct ping; 4 means 4 direct pings; 0 means do MaxPings and stop
+	MaxPings         int        // MaxPings total, direct or DERPed
+	PayloadSize      int        // default: 0 extra bytes
 }
 
 type MapResponse struct {
