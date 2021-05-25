@@ -249,28 +249,28 @@ func TestControlSelectivePing(t *testing.T) {
 	n1.AwaitRunning(t)
 	n2.AwaitRunning(t)
 
-	req := new(tailcfg.MapRequest)
-	env.Control.MapResponse(req)
-	if err := tstest.WaitFor(2*time.Second, func() error {
-		st := n1.MustStatus(t)
-		if st.Self == nil {
-			return errors.New("self peer status is nil")
-		}
-		req.NodeKey = tailcfg.NodeKey(st.Self.PublicKey)
-		return nil
-	}); err != nil {
-		t.Error(err)
-	}
-	mr, err := env.Control.MapResponse(req)
-	if err != nil {
-		t.Error(err)
-	}
-	if mr.PingRequest == nil {
-		t.Error("PingRequest does not exist")
-	}
-	if mr.Peers[0].Addresses[0].IP() != mr.PingRequest.IP {
-		t.Errorf("Mismatch in IP address for the PingRequest, %s and %s not equal", mr.Peers[0].Addresses[0].IP(), mr.PingRequest.IP)
-	}
+	// req := new(tailcfg.MapRequest)
+	// env.Control.MapResponse(req)
+	// if err := tstest.WaitFor(2*time.Second, func() error {
+	// 	st := n1.MustStatus(t)
+	// 	if st.Self == nil {
+	// 		return errors.New("self peer status is nil")
+	// 	}
+	// 	req.NodeKey = tailcfg.NodeKey(st.Self.PublicKey)
+	// 	return nil
+	// }); err != nil {
+	// 	t.Error(err)
+	// }
+	// mr, err := env.Control.MapResponse(req)
+	// if err != nil {
+	// 	t.Error(err)
+	// }
+	// if mr.PingRequest == nil {
+	// 	t.Error("PingRequest does not exist")
+	// }
+	// if mr.Peers[0].Addresses[0].IP() != mr.PingRequest.IP {
+	// 	t.Errorf("Mismatch in IP address for the PingRequest, %s and %s not equal", mr.Peers[0].Addresses[0].IP(), mr.PingRequest.IP)
+	// }
 	d1.MustCleanShutdown(t)
 	d2.MustCleanShutdown(t)
 }

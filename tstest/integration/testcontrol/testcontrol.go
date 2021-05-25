@@ -539,6 +539,7 @@ func (s *Server) serveMap(w http.ResponseWriter, r *http.Request, mkey tailcfg.M
 				}
 				break keepAliveLoop
 			case <-keepAliveTimerCh:
+				log.Println("Keepalivechan")
 				if err := s.sendMapMsg(w, mkey, compress, keepAliveMsg); err != nil {
 					return
 				}
