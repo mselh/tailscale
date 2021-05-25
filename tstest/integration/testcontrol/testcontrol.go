@@ -113,16 +113,21 @@ func (s *Server) serveUnhandled(w http.ResponseWriter, r *http.Request) {
 	go panic(fmt.Sprintf("testcontrol.Server received unhandled request: %s", got.Bytes()))
 }
 
-func (s *Server) addPingRequest(res *tailcfg.MapResponse) error {
+func (s *Server) addLowLevelPingRequest(res *tailcfg.MapResponse) error {
 	if len(res.Peers) == 0 {
 		return errors.New("MapResponse has no peers to ping")
 	}
 
-	if len(res.Peers[0].Addresses) == 0 || len(res.Peers[0].AllowedIPs) == 0 {
-		return errors.New("peer has no Addresses or no AllowedIPs")
+	if len(res.Peers[0].Addresses) == 0 {
+		return errors.New("peer has no Addresses")
 	}
+
+	if len(res.Peers[0].AllowedIPs) == 0 {
+		return errors.New("peer has no AllowedIPs")
+	}
+
 	targetIP := res.Peers[0].AllowedIPs[0].IP()
-	res.PingRequest = &tailcfg.PingRequest{URL: s.BaseURL + "/ping", IP: targetIP, Types: "tsmp"}
+	res.LowLevelPingRequest = &tailcfg.LowLevelPingRequest{URL: s.BaseURL + "/ping", IP: targetIP, Types: "tsmp"}
 	return nil
 }
 
@@ -188,14 +193,14 @@ func (s *Server) serveMachine(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) servePingInfo(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "PUT" {
-		panic("Only PUT requests are supported currently")
+		http.Error(w, "Only PUT requests are supported currently", http.StatusMethodNotAllowed)
 	}
 	w.Header().Set("Content-Type", "text/plain")
 	reqBody, err := ioutil.ReadAll(r.Body)
+	defer r.Body.Close()
 	if err != nil {
 		panic("Failed to read request body")
 	}
-	w.WriteHeader(200)
 	io.WriteString(w, "Ping Streamed Back : "+string(reqBody))
 }
 
@@ -582,13 +587,6 @@ func (s *Server) MapResponse(req *tailcfg.MapRequest) (res *tailcfg.MapResponse,
 	}
 	res.Node.AllowedIPs = res.Node.Addresses
 
-	if req.Ping {
-		err = s.addPingRequest(res)
-		// Currently some responses just won't have peers
-		if err != nil {
-			s.logf("%v", err)
-		}
-	}
 	return res, nil
 }
 

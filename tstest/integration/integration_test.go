@@ -250,7 +250,6 @@ func TestControlSelectivePing(t *testing.T) {
 	n2.AwaitRunning(t)
 
 	req := new(tailcfg.MapRequest)
-	req.Ping = true
 	env.Control.MapResponse(req)
 	if err := tstest.WaitFor(2*time.Second, func() error {
 		st := n1.MustStatus(t)
@@ -266,12 +265,11 @@ func TestControlSelectivePing(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	t.Log("RECEIVED PR", mr.PingRequest)
 	if mr.PingRequest == nil {
 		t.Error("PingRequest does not exist")
 	}
 	if mr.Peers[0].Addresses[0].IP() != mr.PingRequest.IP {
-		t.Error("Mismatch in IP address for the PingRequest")
+		t.Errorf("Mismatch in IP address for the PingRequest, %s and %s not equal", mr.Peers[0].Addresses[0].IP(), mr.PingRequest.IP)
 	}
 	d1.MustCleanShutdown(t)
 	d2.MustCleanShutdown(t)

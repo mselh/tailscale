@@ -749,9 +749,6 @@ type MapRequest struct {
 	//     * "minimize-netmap": have control minimize the netmap, removing
 	//       peers that are unreachable per ACLS.
 	DebugFlags []string `json:",omitempty"`
-
-	// Basic boolean field to determine if a Ping is being intitiated
-	Ping bool
 }
 
 // PortRange represents a range of UDP or TCP port numbers.
@@ -896,6 +893,29 @@ type PingRequest struct {
 	PayloadSize      int        // default: 0 extra bytes
 }
 
+// LowLevelPingRequest is a request to have the client ping another client.
+// It will use the lower level ping TSMP or disco.
+type LowLevelPingRequest struct {
+	IP               netaddr.IP // IP address that we are going to ping
+	StopAfterNDirect int        // StopAfterNDirect 1 means stop on 1st direct ping; 4 means 4 direct pings; 0 means do MaxPings and stop
+	MaxPings         int        // MaxPings total, direct or DERPed
+	Types            string     // TYPES empty means all: TSMP+ICMP+disco
+	URL              string     // URL of where we should stream responses back via HTTP
+}
+
+// StreamedPingResult sends the results of the LowLevelPing requested by a
+// LowLevelPingRequest in a MapResponse.
+type StreamedPingResult struct {
+	IP      netaddr.IP
+	SeqNum  int     // somewhat redundant with TxID but for clarity
+	SentTo  NodeID  // for exit/subnet relays
+	TxID    string  // N hex bytes random
+	Dir     string  // "in"/"out"
+	Type    string  // ICMP, disco, TSMP, ...
+	Via     string  // "direct", "derp-nyc", ...
+	Seconds float64 // for Dir "in" only
+}
+
 type MapResponse struct {
 	// KeepAlive, if set, represents an empty message just to keep
 	// the connection alive. When true, all other fields except
@@ -908,6 +928,12 @@ type MapResponse struct {
 	// PingRequest may be sent on any MapResponse (ones with
 	// KeepAlive true or false).
 	PingRequest *PingRequest `json:",omitempty"`
+
+	// LowLevelPingRequest, if non-empty, is a request to the client to ping another node
+	// The IP given in the LowLevelPingRequest using either TSMP or disco pings.
+	// LowLevelPingRequest may be sent on any MapResponse (ones with
+	// KeepAlive true or false).
+	LowLevelPingRequest *LowLevelPingRequest `json:",omitempty"`
 
 	// Networking
 
