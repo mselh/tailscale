@@ -64,7 +64,6 @@ var pingArgs struct {
 }
 
 func runPing(ctx context.Context, args []string) error {
-	fmt.Println("runPing")
 	c, bc, ctx, cancel := connect(ctx)
 	defer cancel()
 
@@ -118,7 +117,6 @@ func runPing(ctx context.Context, args []string) error {
 			if pingArgs.tsmp {
 				// TODO(bradfitz): populate the rest of ipnstate.PingResult for TSMP queries?
 				// For now just say it came via TSMP.
-				fmt.Println("TSMP CANE")
 				via = "TSMP"
 			}
 			anyPong = true
