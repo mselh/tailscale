@@ -201,17 +201,17 @@ func (s *Server) serveMachine(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// servePingInfo TODO, determine the correct response to client
 func (s *Server) servePingInfo(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain")
 	if r.Method != "PUT" {
 		http.Error(w, "Only PUT requests are supported currently", http.StatusMethodNotAllowed)
 	}
-	w.Header().Set("Content-Type", "text/plain")
-	reqBody, err := ioutil.ReadAll(r.Body)
+	_, err := ioutil.ReadAll(r.Body)
 	defer r.Body.Close()
 	if err != nil {
 		http.Error(w, "Failed to read request body", http.StatusInternalServerError)
 	}
-	io.WriteString(w, "Ping Streamed Back : "+string(reqBody))
 }
 
 // QueueControlPingRequest enqueues a bool to PingRequestC.

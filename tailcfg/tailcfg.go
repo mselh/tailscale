@@ -884,13 +884,6 @@ type PingRequest struct {
 	// Log is whether to log about this ping in the success case.
 	// For failure cases, the client will log regardless.
 	Log bool `json:",omitempty"`
-
-	Initiator        string     // admin@email; "system" (for Tailscale)
-	IP               netaddr.IP // IP address that we are going to ping
-	Types            string     // empty means all: TSMP+ICMP+disco
-	StopAfterNDirect int        // 1 means stop on 1st direct ping; 4 means 4 direct pings; 0 means do MaxPings and stop
-	MaxPings         int        // MaxPings total, direct or DERPed
-	PayloadSize      int        // default: 0 extra bytes
 }
 
 // ControlPingRequest is a request to have the client ping another client.
@@ -899,21 +892,21 @@ type ControlPingRequest struct {
 	IP               netaddr.IP // IP address that we are going to ping
 	StopAfterNDirect int        // StopAfterNDirect 1 means stop on 1st direct ping; 4 means 4 direct pings; 0 means do MaxPings and stop
 	MaxPings         int        // MaxPings total, direct or DERPed
-	Types            string     // TYPES empty means all: TSMP+ICMP+disco
+	Types            string     // Types empty means all: TSMP+ICMP+disco
 	URL              string     // URL of where we should stream responses back via HTTP
 }
 
 // StreamedPingResult sends the results of the LowLevelPing requested by a
 // ControlPingRequest in a MapResponse.
 type StreamedPingResult struct {
-	IP      netaddr.IP
-	SeqNum  int     // somewhat redundant with TxID but for clarity
-	SentTo  NodeID  // for exit/subnet relays
-	TxID    string  // N hex bytes random
-	Dir     string  // "in"/"out"
-	Type    string  // ICMP, disco, TSMP, ...
-	Via     string  // "direct", "derp-nyc", ...
-	Seconds float64 // for Dir "in" only
+	IP      netaddr.IP // IP Address that was Pinged
+	SeqNum  int        // SeqNum is somewhat redundant with TxID but for clarity
+	SentTo  NodeID     // SentTo for exit/subnet relays
+	TxID    string     // TxID N hex bytes random
+	Dir     string     // Dir "in"/"out"
+	Type    string     // Type of ping : ICMP, disco, TSMP, ...
+	Via     string     // Via "direct", "derp-nyc", ...
+	Seconds float64    // Seconds for Dir "in" only
 }
 
 type MapResponse struct {
