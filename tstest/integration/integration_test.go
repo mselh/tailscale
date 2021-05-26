@@ -249,28 +249,29 @@ func TestControlSelectivePing(t *testing.T) {
 	n1.AwaitRunning(t)
 	n2.AwaitRunning(t)
 
-	// req := new(tailcfg.MapRequest)
-	// env.Control.MapResponse(req)
-	// if err := tstest.WaitFor(2*time.Second, func() error {
-	// 	st := n1.MustStatus(t)
-	// 	if st.Self == nil {
-	// 		return errors.New("self peer status is nil")
-	// 	}
-	// 	req.NodeKey = tailcfg.NodeKey(st.Self.PublicKey)
-	// 	return nil
-	// }); err != nil {
-	// 	t.Error(err)
-	// }
-	// mr, err := env.Control.MapResponse(req)
-	// if err != nil {
-	// 	t.Error(err)
-	// }
-	// if mr.PingRequest == nil {
-	// 	t.Error("PingRequest does not exist")
-	// }
-	// if mr.Peers[0].Addresses[0].IP() != mr.PingRequest.IP {
-	// 	t.Errorf("Mismatch in IP address for the PingRequest, %s and %s not equal", mr.Peers[0].Addresses[0].IP(), mr.PingRequest.IP)
-	// }
+	// Wait for server to start serveMap
+	if err := tstest.WaitFor(2*time.Second, func() error {
+		env.Control.QueueControlPingRequest()
+		if len(env.Control.PingRequestC) == 0 {
+			return errors.New("failed to add to PingRequestC")
+		}
+		return nil
+	}); err != nil {
+		t.Error(err)
+	}
+
+	// Wait for a MapResponse by Simulating
+	// the time needed for MapResponse method call.
+	if err := tstest.WaitFor(20*time.Second, func() error {
+		time.Sleep(500 * time.Millisecond)
+
+		if len(env.Control.PingRequestC) == 1 {
+			t.Error("Expected PingRequestC to be empty")
+		}
+		return nil
+	}); err != nil {
+		t.Error(err)
+	}
 	d1.MustCleanShutdown(t)
 	d2.MustCleanShutdown(t)
 }

@@ -36,14 +36,17 @@ import (
 // Server is a control plane server. Its zero value is ready for use.
 // Everything is stored in-memory in one tailnet.
 type Server struct {
-	Logf        logger.Logf      // nil means to use the log package
-	DERPMap     *tailcfg.DERPMap // nil means to use prod DERP map
-	RequireAuth bool
-	BaseURL     string // must be set to e.g. "http://127.0.0.1:1234" with no trailing URL
-	Verbose     bool
+	Logf         logger.Logf      // nil means to use the log package
+	DERPMap      *tailcfg.DERPMap // nil means to use prod DERP map
+	RequireAuth  bool
+	BaseURL      string // must be set to e.g. "http://127.0.0.1:1234" with no trailing URL
+	Verbose      bool
+	PingRequestC chan bool
 
 	initMuxOnce sync.Once
 	mux         *http.ServeMux
+
+	initPRchannelOnce sync.Once
 
 	mu            sync.Mutex
 	pubKey        wgkey.Key
@@ -102,8 +105,13 @@ func (s *Server) initMux() {
 	s.mux.HandleFunc("/ping", s.servePingInfo)
 }
 
+func (s *Server) initPingRequestC() {
+	s.PingRequestC = make(chan bool, 1)
+}
+
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.initMuxOnce.Do(s.initMux)
+	s.initPRchannelOnce.Do(s.initPingRequestC)
 	s.mux.ServeHTTP(w, r)
 }
 
@@ -113,7 +121,9 @@ func (s *Server) serveUnhandled(w http.ResponseWriter, r *http.Request) {
 	go panic(fmt.Sprintf("testcontrol.Server received unhandled request: %s", got.Bytes()))
 }
 
-func (s *Server) addLowLevelPingRequest(res *tailcfg.MapResponse) error {
+// addControlPingRequest adds a ControlPingRequest pointer
+//
+func (s *Server) addControlPingRequest(res *tailcfg.MapResponse) error {
 	if len(res.Peers) == 0 {
 		return errors.New("MapResponse has no peers to ping")
 	}
@@ -127,7 +137,7 @@ func (s *Server) addLowLevelPingRequest(res *tailcfg.MapResponse) error {
 	}
 
 	targetIP := res.Peers[0].AllowedIPs[0].IP()
-	res.LowLevelPingRequest = &tailcfg.LowLevelPingRequest{URL: s.BaseURL + "/ping", IP: targetIP, Types: "tsmp"}
+	res.ControlPingRequest = &tailcfg.ControlPingRequest{URL: s.BaseURL + "/ping", IP: targetIP, Types: "tsmp"}
 	return nil
 }
 
@@ -202,6 +212,16 @@ func (s *Server) servePingInfo(w http.ResponseWriter, r *http.Request) {
 		panic("Failed to read request body")
 	}
 	io.WriteString(w, "Ping Streamed Back : "+string(reqBody))
+}
+
+// QueueControlPingRequest enqueues a bool to PingRequestC.
+// in serveMap this will result to a ControlPingRequest
+// added to the next MapResponse sent to the client
+func (s *Server) QueueControlPingRequest() {
+	// Redundant check to avoid errors when called multiple times
+	if len(s.PingRequestC) == 0 {
+		s.PingRequestC <- true
+	}
 }
 
 // Node returns the node for nodeKey. It's always nil or cloned memory.
@@ -499,6 +519,12 @@ func (s *Server) serveMap(w http.ResponseWriter, r *http.Request, mkey tailcfg.M
 	w.WriteHeader(200)
 	for {
 		res, err := s.MapResponse(req)
+
+		select {
+		case <-s.PingRequestC:
+			s.addControlPingRequest(res)
+		default:
+		}
 		if err != nil {
 			// TODO: log
 			return
