@@ -209,7 +209,7 @@ func (s *Server) servePingInfo(w http.ResponseWriter, r *http.Request) {
 	reqBody, err := ioutil.ReadAll(r.Body)
 	defer r.Body.Close()
 	if err != nil {
-		panic("Failed to read request body")
+		http.Error(w, "Failed to read request body", http.StatusInternalServerError)
 	}
 	io.WriteString(w, "Ping Streamed Back : "+string(reqBody))
 }
