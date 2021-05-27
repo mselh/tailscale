@@ -25,6 +25,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"golang.org/x/crypto/nacl/box"
@@ -2668,6 +2669,12 @@ func (c *Conn) bindSocket(rucPtr **RebindingUDPConn, network string) error {
 		}
 		// Success.
 		ruc.pconn = pconn
+		file, err := pconn.(*net.UDPConn).File()
+		if err != nil {
+			panic("oh well")
+		}
+		ruc.file = file
+		ruc.fd = int(file.Fd())
 		if network == "udp4" {
 			health.SetUDP4Unbound(false)
 		}
@@ -2679,6 +2686,7 @@ func (c *Conn) bindSocket(rucPtr **RebindingUDPConn, network string) error {
 	// This keeps the receive funcs alive for a future in which
 	// we get a link change and we can try binding again.
 	ruc.pconn = newBlockForeverConn()
+	// TODO ruc.file
 	if network == "udp4" {
 		health.SetUDP4Unbound(true)
 	}
@@ -2774,6 +2782,8 @@ func (c *Conn) ParseEndpoint(endpointStr string) (conn.Endpoint, error) {
 type RebindingUDPConn struct {
 	mu    sync.Mutex
 	pconn net.PacketConn
+	file  *os.File // dup of pconn's fd
+	fd    int      // file's fd
 }
 
 // currentConn returns c's current pconn.
@@ -2781,6 +2791,13 @@ func (c *RebindingUDPConn) currentConn() net.PacketConn {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.pconn
+}
+
+// currentConn returns c's current pconn.
+func (c *RebindingUDPConn) currentConnFile() (net.PacketConn, int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.pconn, c.fd
 }
 
 // ReadFrom reads a packet from c into b.
@@ -2805,15 +2822,25 @@ func (c *RebindingUDPConn) ReadFrom(b []byte) (int, net.Addr, error) {
 // when c's underlying connection is a net.UDPConn.
 func (c *RebindingUDPConn) ReadFromNetaddr(b []byte) (n int, ipp netaddr.IPPort, err error) {
 	for {
-		pconn := c.currentConn()
+		pconn, fd := c.currentConnFile()
 
 		// Optimization: Treat *net.UDPConn specially.
 		// ReadFromUDP gets partially inlined, avoiding allocating a *net.UDPAddr,
 		// as long as pAddr itself doesn't escape.
 		// The non-*net.UDPConn case works, but it allocates.
 		var pAddr *net.UDPAddr
-		if udpConn, ok := pconn.(*net.UDPConn); ok {
-			n, pAddr, err = udpConn.ReadFromUDP(b)
+		if _, ok := pconn.(*net.UDPConn); ok {
+			if err == nil {
+				var from syscall.SockaddrInet4
+				// TODO: make SIGINT work again
+				n, err = syscall.RecvfromInet4(fd, b, 0, &from)
+				if err == syscall.EINTR || err == syscall.EAGAIN {
+					continue
+				}
+				if err == nil {
+					ipp = netaddr.IPPortFrom(netaddr.IPFrom4(from.Addr), uint16(from.Port))
+				}
+			}
 		} else {
 			var addr net.Addr
 			n, addr, err = pconn.ReadFrom(b)
@@ -2822,20 +2849,20 @@ func (c *RebindingUDPConn) ReadFromNetaddr(b []byte) (n int, ipp netaddr.IPPort,
 				if !ok {
 					return 0, netaddr.IPPort{}, fmt.Errorf("RebindingUDPConn.ReadFromNetaddr: underlying connection returned address of type %T, want *netaddr.UDPAddr", addr)
 				}
+
+				// Convert pAddr to a netaddr.IPPort.
+				// This prevents pAddr from escaping.
+				var ok bool
+				ipp, ok = netaddr.FromStdAddr(pAddr.IP, pAddr.Port, pAddr.Zone)
+				if !ok {
+					return 0, netaddr.IPPort{}, errors.New("netaddr.FromStdAddr failed")
+				}
 			}
 		}
 
 		if err != nil {
 			if pconn != c.currentConn() {
 				continue
-			}
-		} else {
-			// Convert pAddr to a netaddr.IPPort.
-			// This prevents pAddr from escaping.
-			var ok bool
-			ipp, ok = netaddr.FromStdAddr(pAddr.IP, pAddr.Port, pAddr.Zone)
-			if !ok {
-				return 0, netaddr.IPPort{}, errors.New("netaddr.FromStdAddr failed")
 			}
 		}
 		return n, ipp, err
@@ -2866,7 +2893,18 @@ func (c *RebindingUDPConn) closeLocked() error {
 	if c.pconn == nil {
 		return errNilPConn
 	}
-	return c.pconn.Close()
+	if c.file == nil {
+		return errNilPConn
+	}
+	err := c.pconn.Close()
+	err2 := c.file.Close()
+	if err != nil {
+		return err
+	}
+	if err2 != nil {
+		return err
+	}
+	return nil
 }
 
 func (c *RebindingUDPConn) WriteToUDP(b []byte, addr *net.UDPAddr) (int, error) {
