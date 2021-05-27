@@ -890,6 +890,7 @@ type PingRequest struct {
 // It will use the lower level ping TSMP or disco.
 type ControlPingRequest struct {
 	IP               netaddr.IP // IP address that we are going to ping
+	Peer             *Node      // Peer is a pointer to the Node that we want to Ping
 	StopAfterNDirect int        // StopAfterNDirect 1 means stop on 1st direct ping; 4 means 4 direct pings; 0 means do MaxPings and stop
 	MaxPings         int        // MaxPings total, direct or DERPed
 	Types            string     // Types empty means all: TSMP+ICMP+disco

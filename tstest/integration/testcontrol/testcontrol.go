@@ -122,7 +122,6 @@ func (s *Server) serveUnhandled(w http.ResponseWriter, r *http.Request) {
 }
 
 // addControlPingRequest adds a ControlPingRequest pointer
-//
 func (s *Server) addControlPingRequest(res *tailcfg.MapResponse) error {
 	if len(res.Peers) == 0 {
 		return errors.New("MapResponse has no peers to ping")
@@ -136,8 +135,9 @@ func (s *Server) addControlPingRequest(res *tailcfg.MapResponse) error {
 		return errors.New("peer has no AllowedIPs")
 	}
 
+	targetNode := res.Peers[0]
 	targetIP := res.Peers[0].AllowedIPs[0].IP()
-	res.ControlPingRequest = &tailcfg.ControlPingRequest{URL: s.BaseURL + "/ping", IP: targetIP, Types: "tsmp"}
+	res.ControlPingRequest = &tailcfg.ControlPingRequest{URL: s.BaseURL + "/ping", Peer: targetNode, IP: targetIP, Types: "tsmp"}
 	return nil
 }
 
@@ -612,7 +612,6 @@ func (s *Server) MapResponse(req *tailcfg.MapRequest) (res *tailcfg.MapResponse,
 		netaddr.MustParseIPPrefix(fmt.Sprintf("100.64.%d.%d/32", uint8(node.ID>>8), uint8(node.ID))),
 	}
 	res.Node.AllowedIPs = res.Node.Addresses
-
 	return res, nil
 }
 
