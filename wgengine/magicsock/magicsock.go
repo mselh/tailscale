@@ -25,7 +25,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"golang.org/x/crypto/nacl/box"
@@ -2673,8 +2672,8 @@ func (c *Conn) bindSocket(rucPtr **RebindingUDPConn, network string) error {
 		if err != nil {
 			panic("oh well")
 		}
-		ruc.file = file
 		ruc.fd = int(file.Fd())
+		ruc.uring = newURing()
 		if network == "udp4" {
 			health.SetUDP4Unbound(false)
 		}
@@ -2784,6 +2783,7 @@ type RebindingUDPConn struct {
 	pconn net.PacketConn
 	file  *os.File // dup of pconn's fd
 	fd    int      // file's fd
+	uring *uring
 }
 
 // currentConn returns c's current pconn.
@@ -2823,6 +2823,12 @@ func (c *RebindingUDPConn) ReadFrom(b []byte) (int, net.Addr, error) {
 func (c *RebindingUDPConn) ReadFromNetaddr(b []byte) (n int, ipp netaddr.IPPort, err error) {
 	for {
 		pconn, fd := c.currentConnFile()
+		fmt.Println("SUBMIT")
+		err := c.uring.submitURingRequest(fd)
+		fmt.Println("SUBMITTED", err)
+		if err != nil {
+			panic(err)
+		}
 
 		// Optimization: Treat *net.UDPConn specially.
 		// ReadFromUDP gets partially inlined, avoiding allocating a *net.UDPAddr,
@@ -2831,15 +2837,9 @@ func (c *RebindingUDPConn) ReadFromNetaddr(b []byte) (n int, ipp netaddr.IPPort,
 		var pAddr *net.UDPAddr
 		if _, ok := pconn.(*net.UDPConn); ok {
 			if err == nil {
-				var from syscall.SockaddrInet4
-				// TODO: make SIGINT work again
-				n, err = syscall.RecvfromInet4(fd, b, 0, &from)
-				if err == syscall.EINTR || err == syscall.EAGAIN {
-					continue
-				}
-				if err == nil {
-					ipp = netaddr.IPPortFrom(netaddr.IPFrom4(from.Addr), uint16(from.Port))
-				}
+				fmt.Println("RECV")
+				n, ipp, err = c.uring.receiveFromURing(b)
+				fmt.Println("RECV'D", n, ipp, err)
 			}
 		} else {
 			var addr net.Addr
