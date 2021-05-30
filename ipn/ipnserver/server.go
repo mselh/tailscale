@@ -44,6 +44,7 @@ import (
 	"tailscale.com/util/pidowner"
 	"tailscale.com/util/systemd"
 	"tailscale.com/version"
+	"tailscale.com/version/distro"
 	"tailscale.com/wgengine"
 )
 
@@ -318,6 +319,12 @@ func isReadonlyConn(ci connIdentity, operatorUID string, logf logger.Logf) bool 
 	if runtime.GOOS == "windows" {
 		// Windows doesn't need/use this mechanism, at least yet. It
 		// has a different last-user-wins auth model.
+		return false
+	}
+	// TODO(maisem): what should we do here? This is the easiest option to allow
+	// all users access to tailscale, but is that something that we want to do?
+	// On Windows we use a last-user-wins auth model, maybe do the same here?
+	if distro.Get() == distro.Synology {
 		return false
 	}
 	const ro = true
