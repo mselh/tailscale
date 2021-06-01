@@ -199,7 +199,7 @@ func addProcesses(pl []Port) ([]Port, error) {
 						if perr != nil {
 							continue
 						}
-						if n, perr := rp.Resolve(proxyPort); perr == nil {
+						if n, perr := rp.Resolve(pport); perr == nil {
 							pe.Process = fmt.Sprintf("docker container: %s", n)
 						}
 
